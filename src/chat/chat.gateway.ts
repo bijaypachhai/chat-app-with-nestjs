@@ -1,5 +1,6 @@
 import { Logger } from "@nestjs/common";
 import {
+  MessageBody,
   OnGatewayConnection,
   OnGatewayDisconnect,
   OnGatewayInit,
@@ -10,7 +11,7 @@ import {
 
 import { Server } from "socket.io";
 
-@WebSocketGateway()
+@WebSocketGateway(3005, { cors: { origin: '*' } })
 export class ChatGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
@@ -26,21 +27,26 @@ export class ChatGateway
     const { sockets } = this.io.sockets;
 
     this.logger.log(`Client id: ${client.id} connected`);
-    this.logger.debug(`Number of connected clients: ${sockets.size}`);
+   // this.logger.debug(`Number of connected clients: ${sockets.size}`);
+    client.broadcast.emit('user-joined', {
+      message: `User joined the chat: ${client.id}`,
+      clientId: client.id,
+    });
   }
 
   handleDisconnect(client: any) {
     this.logger.log(`Cliend id:${client.id} disconnected`);
+    this.io.emit('user-left', {
+      message: `User left the chat: ${client.id}`,
+      clientId: client.id,
+    });
   }
 
-  @SubscribeMessage("ping")
-  handleMessage(client: any, data: any) {
-    this.logger.log(`Message received from client id: ${client.id}`);
-    this.logger.debug(`Payload: ${data}`);
-    return {
-      event: "pong",
-      data //"Wrong data that will make the test fail",
-    };
+  @SubscribeMessage("newMessage")
+  handleMessage(@MessageBody() message: any, client: any): void {
+    // this.logger.log(`Message received from client id: ${client.id}`);
+    //this.logger.debug(`Payload: ${data}`);
+    this.io.emit('message',message);
   }
 }
 
