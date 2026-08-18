@@ -1,0 +1,78 @@
+networks:
+  prod_net:
+    name: chat-app-network
+
+volumes:
+  chat_app_pg_data:
+    name: chat-app-pg-data
+  chat_app_redis_data:
+    name: chat-app-redis-data
+
+services:
+  chat_app_postgres:
+    container_name: chat_app_postgres
+    image: 'postgres:16-bookworm'
+    environment:
+      POSTGRES_USER: '${DATABASE_USERNAME}'
+      POSTGRES_PASSWORD: '${DATABASE_PASSWORD}'
+      POSTGRES_DB: '${DATABASE_NAME}'
+    ports:
+      - '5439:5432'
+    restart: '${DOCKER_RESTART_POLICY:-unless-stopped}'
+    stop_grace_period: '3s'
+    volumes:
+      - ../chat_app_pg_data:/var/lib/postgresql/data
+      - ../data/postgres/initdb.d:/docker-entrypoint-initdb.d
+    networks:
+      - prod_net
+    healthcheck:
+      test:
+        ['CMD-SHELL', 'pg_isready -U ${DATABASE_USERNAME} -d ${DATABASE_NAME}']
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+
+  chat_app_redis:
+    container_name: chat_app_redis
+    image: 'redis/redis-stack:latest'
+    environment:
+      REDIS_ARGS: '--save 60 1 --appendonly yes'
+    ports:
+      - '6379:6379'
+      - '8001:8001'
+    restart: '${DOCKER_RESTART_POLICY:-unless-stopped}'
+    volumes:
+      - chat_app_redis_data:/data
+    networks:
+      - prod_net
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      retries: 5
+      timeout: 10s
+
+  # expert_education_api:
+  #   container_name: expert_education_api
+  #   labels:
+  #     com.experteducation.name: 'experteducation'
+  #     com.experteducation.version_tag: '1'
+  #     com.experteducation.techstack: 'node,nestjs'
+  #   restart: '${DOCKER_RESTART_POLICY:-unless-stopped}'
+  #   env_file:
+  #     - ./.env.production
+  #   volumes:
+  #     - ./node_modules:/app/node_modules
+  #     - .:/app
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - '3001:3001'
+  #   depends_on:
+  #     expert_education_redis:
+  #       condition: service_healthy
+  #     expert_education_postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - prod_net
